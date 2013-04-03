@@ -1,0 +1,312 @@
+#!/usr/bin/python
+import os
+import sys
+
+
+""" SETTINGS """
+
+"""    >DEFAULTS """
+home = (os.path.expanduser("~"))
+syncserver = ""
+syncserverip = ""
+syncuser = ""
+sshport = "22"
+rsyncdir = ""
+syncdir = ""
+rsyncoptions ="vcruzptgoh"
+clearonstart = False
+appendlog = False
+configfileloc = home+"/.msync/msync_config"
+logfile = syncdir + ".rsync/rsync.log"
+nodelete = False 
+quiet = False
+config = []
+exclude = []
+
+
+"""    >READ ARGS THEN GET SETTINGS FROM FILE """
+arg = ["",""]
+try:
+ arg[0] = sys.argv[1]
+except:
+ arg[0] = "noargs"
+try: 
+ arg[1] = sys.argv[2]
+except:
+ arg[1] = "noargs"
+if arg[0] == "--help":
+ print("Usage: 'msync [OPTION]\nUses rsync to synchronise changes between a local path and a remote server(via sftp).'\n\n       --config [FILE]           Run with specified config file.\n       --config-gen              Generate a new config file.\n\n       Use msync with no arguments to use config at ~/.msync/msync_config") 
+ sys.exit(1) 
+if (len(sys.argv)) == 1:
+ arg[0] = "noargs"
+elif arg[0] == "--config-gen":
+
+  """ GENERATE A NEW CONFIG FILE """
+	print("!Generate new config file.")
+        print("\nSpecify config file path:")
+	inp_path = raw_input("[~/.msync/msync_config] >")
+	if inp_path == "": inp_path = home+"/.msync/msync_config" ; print(" using:"+inp_path)
+	inp_syncdir=""
+	while inp_syncdir =="":	
+	 print("\nSpecify local sync path:")
+	 inp_syncdir = raw_input(" >")
+	 if inp_syncdir == "": print(" This value cannot be blank!")	
+	 if inp_syncdir!="" and os.path.isdir(inp_syncdir) == False: inp_syncdir="" ; print(" Directory does not exist, please create first with mkdir!")
+	inp_syncserverip=""
+	while inp_syncserverip =="":	
+	 print("\nSpecify remote host:")
+	 inp_syncserverip = raw_input(" >")
+	 if inp_syncserverip == "": print(" This value cannot be blank!")
+	print("\nSpecify SSH port:")
+	inp_syncserverport = raw_input("[22] >")
+	if inp_syncserverport == "": inp_syncserverport="22" ; print(" using:"+inp_syncserverport)
+	print("\nSpecify remote server username:")
+	inp_syncserveruser = raw_input(" >")
+	inp_rsyncdir=""
+	while inp_rsyncdir =="":	
+	 print("\nSpecify remote sync path:")
+	 inp_rsyncdir = raw_input(" >")
+	 if inp_syncdir == "": print(" This value cannot be blank!")	
+	print("\nIn order to run msync effectivly it is recommended that you configure SSH key authentication with the remote host, would you like to configure this now?:")
+	inp_tmp = ""
+	while inp_tmp == "":	
+	 inp_tmp = raw_input("[Yes] >")
+         if inp_tmp == "": inp_tmp = "Yes" ; break
+	 if inp_tmp == "yes": inp_tmp = "Yes" ; break
+	 if inp_tmp == "Y": inp_tmp = "Yes" ; break
+	 if inp_tmp == "y": inp_tmp = "Yes" ; break
+	 if inp_tmp == "Yes": break
+	 if inp_tmp == "no": inp_tmp = "No" ; break
+	 if inp_tmp == "N": inp_tmp = "No" ; break
+	 if inp_tmp == "n": inp_tmp = "No" ; break
+	 if inp_tmp == "No": break
+	if inp_tmp == "Yes":
+	 """ GENERATE PUB KEY FOR SSH """
+	 if os.path.isfile(home+"/.ssh/id_rsa") == False or os.path.isfile(home+"/.ssh/id_rsa.pub") == False:
+	  print(" Cannot find keypair for your logon, lets generate a new one...")
+	  os.system("ssh-keygen")
+	 else:
+	  print(" Keypair found at: "+home+"/.ssh/")
+	 print("Installing Public key on server...")
+	 os.system("ssh-copy-id -i "+home+"/.ssh/id_rsa.pub \""+inp_syncserveruser+"@"+inp_syncserverip+" -p "+inp_syncserverport+"\"")
+        print("Generating config file...")
+	configfileout = open(inp_path,"w")
+	configfileout.write("SyncServer "+inp_syncserverip+"\n")
+	configfileout.write("SyncUser "+inp_syncserveruser+"\n")
+	configfileout.write("SSHPort "+inp_syncserverport+"\n")
+	configfileout.write("SyncDir "+inp_syncdir+"\n")
+	configfileout.write("RSyncDir "+inp_rsyncdir+"\n")
+	inp_syncdir=inp_syncdir.rstrip("//")
+	configfileout.write("LogFile "+inp_syncdir+"/.rsync/rsync.log\n")
+	configfileout.write("#Exclude     -    Exclude file pattens from sync(one exclude per line), e.g. Exclude *~\n")
+	configfileout.write("#AppendLog     -    Un-comment to change log behaviour to append (default = overwrite)\n")
+	configfileout.write("#RSyncOptions     -    Specify custom rsync options (see man rsync), default = vcruzptgoh\n")
+	configfileout.write("#ClearOnStart     -    Un-comment to cause msync to clear the screen each time it is run\n")	
+	configfileout.write("#NoDelete     -    Un-comment to prevent msync from deleting anything from the local or remote directorys \n")
+	configfileout.close()
+        print("Config file written to: "+inp_path+", edit this file to make changes or for extra settings.")
+	sys.exit(0)
+
+elif arg[0] == "--config":
+ if arg[1] == "noargs":
+  print("A FILE must be specified with --config.\nTry 'msync --help' for more infomation.")
+  sys.exit(1)
+ configfileloc = arg[1]
+ print("!Using: "+configfileloc)
+else:
+ print("Try 'msync --help' for more infomation.")
+ sys.exit(1)
+os.system("cat "+configfileloc+" | grep -v '^$' > "+configfileloc+".tmp")
+try:
+ configfile = open(configfileloc+".tmp","r")
+except:
+ print("Config file does not exist at: '"+configfileloc+"' or cannot be accessed\nUse msync --config-gen to create it.")
+ sys.exit(1)
+config = configfile.readlines()
+configfile.close()
+os.system("rm "+configfileloc+".tmp")
+for i in range(len(config)):
+ config[i] = config[i].replace("\n","")
+for i in range(len(config)):
+ print("'"+config[i]+"'")
+ if "#" in config[i]:
+  config[i]=""
+ elif "SyncServer" in config[i]:
+  config[i]=config[i].replace("SyncServer","").replace(" ","")
+  syncserverip = config[i]
+ elif "SyncUser" in config[i]:
+  config[i]=config[i].replace("SyncUser","").replace(" ","")
+  syncuser = config[i]
+ elif "RSyncDir" in config[i]:
+  config[i]=config[i].replace("RSyncDir ","")
+  rsyncdir = config[i]
+ elif "SyncDir" in config[i]:
+  config[i]=config[i].replace("SyncDir ","")
+  syncdir = config[i]
+  print ("RSDIR:"+rsyncdir+"'")
+ elif "SSHPort" in config[i]:
+  config[i]=config[i].replace("SSHPort","").replace(" ","")
+  sshport = config[i]
+ elif "RSyncOptions" in config[i]:
+  config[i]=config[i].replace("RSyncOptions","").replace(" ","")
+  rsyncoptions = config[i]
+ elif "LogFile" in config[i]:
+  config[i]=config[i].replace("LogFile ","")
+  logfile = config[i]
+ elif "Exclude" in config[i]:
+  config[i]=config[i].replace("Exclude ","")
+  exclude.append (config[i])
+ elif "AppendLog" in config[i]:
+  appendlog = True
+ elif "ClearOnStart" in config[i]:
+  clearonstart = True
+ elif "NoDelete" in config[i]:
+  nodelete = True
+ else:
+  if config[i] != "\n":
+   print("Unknown setting in config file:'"+config[i]+"'")
+   sys.exit(1)
+syncserver=syncuser+"@"+syncserverip
+if syncserver == "":
+ print("Config file missing critical parameter: SyncServer")
+ sys.exit("1")
+elif syncuser == "":
+ print("Config file missing critical parameter: SyncUser")
+ sys.exit("1")
+elif syncdir == "":
+ print("Config file missing critical parameter: SyncDir")
+ sys.exit("1")
+elif rsyncdir == "":
+ print("Config file missing critical parameter: RSyncDir")
+ sys.exit("1")
+
+
+""" SETUP EXCLUDE LIST """
+excludefile = open(syncdir+".rsync/exclude","w")
+for i in range(len(exclude)):
+ excludefile.write(exclude[i]+"\n")
+excludefile.write(".rsync\n")
+excludefile.close()
+
+""" PRE-SYNC TASKS """
+if appendlog == False:
+ os.system("rm "+logfile)
+if clearonstart == True:
+ os.system("clear")
+
+"""    >SETUP LOG """
+os.system("date +\"%n--- Sync Started:%d/%m/%y %H:%M:%S ---\" >> "+logfile)
+
+"""    >PRINT STATS """
+print ("--MSync--\nSync Server:\n"+syncserver+"["+sshport+"]:"+rsyncdir+"\nSync Dir:\n"+syncdir+"\nLog File:\n"+logfile+"(Append:"+str(appendlog)+")\nLast Sync:")
+os.system("stat "+syncdir+".rsync/markerfile --printf %y")
+print ("\n---------")
+
+
+"""****MAIN SYNC CODE****"""
+
+
+
+""" DELETE MISSING FILE FROM SERVER UNLESS THEY HAVE BEEN MODIFIED REMOTLY """
+if nodelete == False:	
+	print ("!Remove non-modified erroneous files from server:")
+	command = "rsync -t --rsh='ssh -p"+sshport+"' "+syncdir+".rsync/markerfile "+syncserver+":"+rsyncdir+".rsync/markerfile"
+	os.system(command)
+	os.system("ssh "+syncserverip+" -p"+sshport+" 'find "+rsyncdir+" -newer "+rsyncdir+".rsync/markerfile' > "+syncdir+".rsync/rmodified")
+	print ("Excluding remote files/direcotrys modified Since last sync:")
+	os.system ("cat "+syncdir+".rsync/rmodified | grep -v .rsync")
+	rdelexclude = open(syncdir+".rsync/rmodified",'r')
+	rdelexcludelist = rdelexclude.readlines()
+	rdelexclude.close()
+	for line in range(len(rdelexcludelist)):
+	 tmpline = ""
+	 for i in range(len(rdelexcludelist[line])):
+	  tmp = rdelexcludelist[line][-1:]
+	  rdelexcludelist[line] = rdelexcludelist[line][:-1]
+	  if tmp !="/":
+	   tmpline = tmp + tmpline
+	  else:
+	   break
+	 rdelexcludelist[line]=tmpline
+	rdelexclude = open(syncdir+".rsync/rdelexcludetmp",'w')
+	for linec in range(len(rdelexcludelist)):
+	 rdelexclude.write(rdelexcludelist[linec]+"\n")
+	rdelexclude.write(".rsync\n")
+	rdelexclude.close()
+	os.system("cat "+syncdir+".rsync/rdelexcludetmp | grep -v '^$' > "+syncdir+".rsync/rdelexclude")
+	os.system("rm "+syncdir+".rsync/rdelexcludetmp")
+	os.system ("echo -Remote Delete Exclusions >> "+logfile)
+	os.system ("cat "+syncdir+".rsync/rdelexclude >> "+logfile)
+	os.system ("echo -Remote Deleting: >> "+logfile)
+	command = "rsync -rv --delete --force --ignore-non-existing --ignore-existing --exclude-from "+syncdir+".rsync/rdelexclude --rsh='ssh -p"+sshport+"' "+syncdir+" "+syncserver+":"+rsyncdir+">> "+logfile
+	os.system(command)
+	print("Done!")
+else:
+	print ("!NoDelete = True, skipping remote delete.:")
+
+
+""" DELETE MISSING FILE FROM LOCAL UNLESS THEY HAVE BEEN MODIFIED """
+if nodelete == False:
+	print ("!Remove non-modified erroneous files from local")
+	os.system("find "+syncdir+" -newer "+syncdir+".rsync/markerfile > "+syncdir+".rsync/lmodified")
+	print ("Excluding local files/directors modified since last sync:")
+	os.system ("cat "+syncdir+".rsync/lmodified | grep -v .rsync")
+	ldelexclude = open(syncdir+".rsync/lmodified",'r')
+	ldelexcludelist = ldelexclude.readlines()
+	ldelexclude.close()
+	for line in range(len(ldelexcludelist)):
+	 tmpline = ""
+	 for i in range(len(ldelexcludelist[line])):
+	  tmp = ldelexcludelist[line][-1:]
+	  ldelexcludelist[line] = ldelexcludelist[line][:-1]
+	  if tmp !="/":
+	   tmpline = tmp + tmpline
+	  else:
+	   break
+	 ldelexcludelist[line]=tmpline
+	ldelexclude = open(syncdir+".rsync/ldelexcludetmp",'w')
+	for linec in range(len(ldelexcludelist)):
+	 ldelexclude.write(ldelexcludelist[linec]+"\n")
+	ldelexclude.write(".rsync\n")
+	ldelexclude.close()
+	os.system("cat "+syncdir+".rsync/ldelexcludetmp | grep -v '^$' > "+syncdir+".rsync/ldelexclude")
+	os.system("rm "+syncdir+".rsync/ldelexcludetmp")
+	os.system ("echo -Local Delete Exclusions >> "+logfile)
+	os.system ("cat "+syncdir+".rsync/ldelexclude >> "+logfile)
+	os.system ("echo -Local Delete: >> "+logfile)
+	command = "rsync -rv --delete --force --ignore-non-existing --ignore-existing --exclude-from "+syncdir+".rsync/ldelexclude --rsh='ssh -p"+sshport+"' "+syncserver+":"+rsyncdir+" "+syncdir+" >> "+logfile
+	os.system(command)
+	print("Done!")
+else:
+	print ("!NoDelete = True, skipping local delete.:")
+
+"""SYNC FROM SERVER"""
+print("!Syncing from Server")
+os.system("echo -Sync from server: >> "+logfile)
+command = "rsync -"+rsyncoptions+" --exclude-from "+syncdir+".rsync/exclude --rsh='ssh -p"+sshport+"' "+syncserver+":"+rsyncdir+" "+syncdir+" >> "+logfile
+os.system(command)
+print ("Done!")
+
+
+"""SYNC to SERVER"""
+print("!Syncing to Server")
+os.system("echo -Sync to server: >> "+logfile)
+command = "rsync -"+rsyncoptions+" --exclude-from "+syncdir+".rsync/exclude --rsh='ssh -p"+sshport+"' "+syncdir+" "+syncserver+":"+rsyncdir+" >> "+logfile
+os.system(command)
+print ("Done!")
+
+
+"""SET MARKERFILE for LAST SYNC VALUE"""
+os.system("touch "+syncdir+".rsync/markerfile")
+
+
+
+"""****END MAIN SYNC CODE****"""
+
+
+
+
+""" POST SYNC TASKS """
+
+"""    >END LOG """
+os.system("date +\"--- Sync Finished:%d/%m/%y %H:%M:%S ---%n\" >> "+logfile)
