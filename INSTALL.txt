@@ -1,0 +1,15 @@
+Nothing special just a script file.
+
+Requierments:
+rsync   (install with "apt-get install rsync" or "yum install rsync" or whatever)
+python  (this is a python script and needs python, install with "apt-get install python" or "yum install python" .etc)
+
+To install:
+For simplicity, copy the msync file to a binary location in your PATH e.g.: 
+  ~/bin
+  /usr/bin
+  .etc
+
+or just run from it's directory each time
+
+In order to run you will first need to make the script executable using "chmod +x msync" 
